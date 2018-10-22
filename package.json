@@ -1,0 +1,16 @@
+{
+  "name": "pepe",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "keypress": "^0.2.1",
+    "play-sound": "^1.1.2",
+    "say": "^0.15.0"
+  }
+}
