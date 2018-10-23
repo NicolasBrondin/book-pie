@@ -3,6 +3,7 @@ const say = require('say');
 const fs = require('fs');
 const player = require('play-sound')(opts = {});
 const keypress = require('keypress');
+const child_process = require('child_process');
 
 //CONSTANTS
 const VOICE_SPEED = 1.3;
@@ -13,6 +14,7 @@ var current_book = null;
 var current_chapter = null;
 var selector = 'book';
 var audio = null;
+var tts_proc = null;
 var books = null;
 
 function init() {
@@ -56,8 +58,24 @@ function init() {
 
 // Text-To-Speech
 function tts(str) {
-    say.stop()
-    say.speak(str, null, VOICE_SPEED);
+    //say.stop()
+    //say.speak(str, null, VOICE_SPEED);
+    //
+
+    if (tts_proc) {
+
+        tts_proc.kill('SIGINT');
+    }
+    tts_proc = child_process.spawn('sh', ['-c','espeak -v fr "' + str + '" --stdout | aplay']);
+
+    tts_proc.stdout.on('data', (data) => {
+        console.log(`stdout: ${data}`);
+    });
+
+    tts_proc.stderr.on('data', (data) => {
+        console.log(`stderr: ${data}`);
+    });
+
 }
 
 function getDirectories() {
