@@ -1,12 +1,51 @@
 //LIBS
-const say = require('say');
-const fs = require('fs');
-const player = require('play-sound')(opts = {});
-const keypress = require('keypress');
-const child_process = require('child_process');
+const say = require('say'),
+    fs = require('fs'),
+    player = require('play-sound')(opts = {}),
+    keypress = require('keypress'),
+    child_process = require('child_process'),
+    Gpio = require('onoff').Gpio;
+
+const debug = false;
+let debug_timer = null;
+let button_timer = null;
+let button_available = true;
+
+let button_left, button_right, button_top, button_bottom, led;
+
+function close_process() {
+    if (debug) {
+        clearInterval(debug_timer);
+    }
+    button_top.unexport();
+    button_bottom.unexport();
+    button_left.unexport();
+    button_right.unexport();
+    led.writeSync(0);
+    led.unexport();
+    console.log('Closing normally');
+    process.exit();
+}
+
+if (Gpio.accessible) {
+    try {
+        button_left = new Gpio(27, 'in', 'both', { /*debounceTimeout: 10*/ }); // Physical right button
+        button_right = new Gpio(18, 'in', 'both', { /*debounceTimeout: 10*/ }); //Physical bottom button
+        button_top = new Gpio(22, 'in', 'both', { /*debounceTimeout: 10*/ }); // Physic left button
+        button_bottom = new Gpio(23, 'in', 'both', { /*debounceTimeout: 10*/ }); //Physical top button
+        led = new Gpio(17, 'out');
+        led.writeSync(1);
+        console.log("GPIO configured");
+    } catch (e) {
+        throw e;
+        close_process();
+    }
+} else {
+    console.log("GPIO not accessible");
+}
 
 //CONSTANTS
-const VOICE_SPEED = 1.3;
+const VOICE_SPEED = 1;
 const LIBRARY_ROOT = __dirname + '/data/';
 
 //VARIABLES
@@ -16,6 +55,13 @@ var selector = 'book';
 var audio = null;
 var tts_proc = null;
 var books = null;
+
+function button_clicked() {
+    button_available = false;
+    button_timer = setTimeout(function () {
+        button_available = true;
+    }, 1000);
+}
 
 function init() {
 
@@ -35,17 +81,80 @@ function init() {
     console.log("Books library loaded!");
 
     // Keyboard input initialization
-    keypress(process.stdin);
+    /*keypress(process.stdin);
     process.stdin.on('keypress', detectArrows);
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
+    if (process.stdin.setRawMode){
+        process.stdin.setRawMode(true)
+    }
+
+    process.stdin.resume();*/
+
+
+    button_left.watch(function (err, value) {
+        console.log(new Date()," | button left : ", value);
+        if (value == 1) {
+            if (button_available) {
+                button_clicked();
+                if (selector == 'book') {
+                    previousBook();
+                } else if (selector == 'chapter') {
+                    previousChapter();
+                }
+            }
+        }
+    });
+
+    button_right.watch(function (err, value) {
+
+        console.log(new Date()," | button right: ", value);
+        if (value == 1) {
+            if (button_available) {
+                button_clicked();
+                if (selector == 'book') {
+                    nextBook();
+                } else if (selector == 'chapter') {
+                    nextChapter();
+                }
+            }
+        }
+    });
+
+    button_top.watch(function (err, value) {
+
+        console.log(new Date(), " | button top: ", value);
+        if (value == 1) {
+            if (button_available) {
+                button_clicked();
+                if (selector == 'book') {
+                    openBook();
+                } else if (selector == 'chapter') {
+                    playChapter();
+                }
+            }
+        }
+    });
+
+    button_bottom.watch(function (err, value) {
+
+        console.log(new Date(), " | button bottom: ", value);
+        if (value == 1) {
+            if (button_available) {
+                button_clicked();
+                if (audio) {
+                    stopChapter();
+                } else if (selector == 'chapter') {
+                    closeBook();
+                }
+            }
+        }
+    });
 
     console.log("Starting voice!");
 
     // Voice initialization
-    tts("Bonjour et bienvenue dans votre liseuse de livre audio");
+    tts("Bonjour Pépé !");
     setTimeout(function () {
-        tts("Appuyez sur les touches droites et gauches pour changer les livres et les chapitres. La touche, O, sert a ouvrir un livre ou un chapitre et la touche bas pour revenir en arriere ! ")
+        tts("Touche droite et gauche: Changer les livres. Touche haut: Ouvrir un livre. Touche bas: Revenir en arrière.")
         setTimeout(function () {
             tts("Liste des livres");
             current_book = 0;
@@ -66,7 +175,7 @@ function tts(str) {
 
         tts_proc.kill('SIGINT');
     }
-    tts_proc = child_process.spawn('sh', ['-c','espeak -v fr "' + str + '" --stdout | aplay']);
+    tts_proc = child_process.spawn('sh', ['-c','espeak -v  mb-fr4 -s 115 "' + str + '" --stdout | aplay']);
 
     tts_proc.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
@@ -74,6 +183,10 @@ function tts(str) {
 
     tts_proc.stderr.on('data', (data) => {
         console.log(`stderr: ${data}`);
+    });
+
+    tts_proc.on('close', (code) => {
+        console.log(`Finished speaking`);
     });
 
 }
@@ -181,6 +294,7 @@ function nextChapter() {
     sayChapterTitle();
 }
 
+/*
 function detectArrows(ch, key) {
     process.stdin.pause();
     if (key) {
@@ -213,13 +327,15 @@ function detectArrows(ch, key) {
         }
     }
     process.stdin.resume();
-}
+}*/
 
 init();
 
+if (debug) {
+    debug_timer = setInterval(function () { tts("Bonjour Pépé, comment allez-vous aujourd'hui ?"); }, 3000);
+}
 
-
-
+process.on('SIGINT', close_process);
 
 
 
