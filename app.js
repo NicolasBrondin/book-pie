@@ -1,9 +1,11 @@
 //const FFplay = require("ffplay"),
 const MPlayer = require('mplayer'),
-keypress = require('keypress');
+UserDataManager = require('./UserDataManager.js');
+
 
 const BOOKS_DIR = "./data/";
 const VOICE_DIR = "./audio/";
+const USER_DATA_FILE = "user-data.json";
 
 const WORDS = {
     welcome: VOICE_DIR+"Bienvenue.wav",
@@ -17,9 +19,7 @@ const WORDS = {
     chapter: function(i){return VOICE_DIR+"Chapitre "+i+".wav"}
 }
 
-let save = {
-    book: null
-}
+let data_manager = new UserDataManager();
 
 let books;
 var current_book = null;
@@ -28,6 +28,7 @@ var selector_level = 'menu';
 const menu = ['resume','books','help'];
 let current_menu_item = null;
 var player = new MPlayer();
+let player_status;
 let playlist = [];
 let playing = false;
 
@@ -41,20 +42,20 @@ player.on("stop", function(){
         }
         playing = true;
     }
-})/*
-player.on("status", function(status){
-    console.log(status);
-    if(player_status == null){
-        init();
+})
+
+player.on("time", function(time){
+    if(selector_level === 'player'){
+        
+        data_manager.set_data({
+            time: time
+        });
     }
-    player_status = status;
-    if(player_status.playing == false && playlist.length > 0){
-        player.openFile(playlist.pop());
-    }
-})*/
+})
 fs = require('fs');
 
-function init(){
+async function init(){
+    await data_manager.init(USER_DATA_FILE);
     process.stdin.on('keypress', detectArrows);
     var readline = require('readline');
 var rl = readline.createInterface({
@@ -166,6 +167,9 @@ function execute_command(command){
                 open_main_menu();
             } else if(selector_level === 'chapters'){
                 open_book_list();
+            } else if(selector_level === 'player'){
+                player.stop();
+                open_book_chapters_list();
             }
             break;}
         case "left": {
@@ -208,8 +212,11 @@ function navigate_main_menu(direction){
 }
 
 function load_previous_book(){
-    if(save.book){
-        //TO-DO
+    let user_data = data_manager.get_data();
+    if(user_data.book != null && user_data.chapter != null){
+        current_book = user_data.book;
+        current_chapter = user_data.chapter;
+        play_chapter(user_data.time);
     } else {
         play_sound_file(WORDS.no_save);
     }
@@ -237,9 +244,18 @@ function navigate_chapter_list(direction){
     play_sound_file(WORDS.chapter(current_chapter+1));
 }
 
-function play_chapter(){
+function play_chapter(time){
     selector_level = "player";
-    console.log(BOOKS_DIR+books[current_book].chapters[current_chapter]);
-    play_sound_file(BOOKS_DIR+"/"+books[current_book].title+"/"+books[current_book].chapters[current_chapter]);
+    play_sound_file(BOOKS_DIR+"/"+books[current_book].title+"/"+books[current_book].chapters[current_chapter],{seek: time || 0});
+    data_manager.set_data({
+        book: current_book,
+        chapter: current_chapter
+    });
 }
-init();
+try {
+    (async()=>{
+        await init();
+    })()
+}catch(e){
+    console.error(e);
+}
