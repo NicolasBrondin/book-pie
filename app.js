@@ -27,8 +27,10 @@ var current_chapter = null;
 var selector_level = 'menu';
 const menu = ['resume','books','help'];
 let current_menu_item = null;
-var player = new MPlayer();
-let player_status;
+var player = new MPlayer({debug: false});
+let playing_time = 0;
+let last_playing_time = 0;
+let last_save_time = 0;
 let playlist = [];
 let playing = false;
 
@@ -46,10 +48,18 @@ player.on("stop", function(){
 
 player.on("time", function(time){
     if(selector_level === 'player'){
+        if(time - last_playing_time > 2){
+            playing_time = time;
+            last_playing_time = time;
+        }
+        if(playing_time - last_save_time  > 30){
+            data_manager.set_data({
+                time: time
+            });
+            last_save_time = playing_time;
+            console.log("saved");
+        }
         
-        data_manager.set_data({
-            time: time
-        });
     }
 })
 fs = require('fs');
@@ -179,7 +189,9 @@ function execute_command(command){
                 navigate_book_list(-1);
             }else if(selector_level === 'chapters') {
                 navigate_chapter_list(-1);
-            } 
+            } else if(selector_level === 'player') {
+                navigate_chapter_time(-1);
+            }
             break;
         }
         case "right": {
@@ -189,7 +201,9 @@ function execute_command(command){
                 navigate_book_list(1); 
             }else if(selector_level === 'chapters') {
                 navigate_chapter_list(1);
-            } 
+            } else if(selector_level === 'player') {
+                navigate_chapter_time(1);
+            }
             break;
         }
     }
@@ -245,12 +259,22 @@ function navigate_chapter_list(direction){
 }
 
 function play_chapter(time){
+    playing_time = 0;
+    last_playing_time = 0;
+    last_save_time = 0;
     selector_level = "player";
     play_sound_file(BOOKS_DIR+"/"+books[current_book].title+"/"+books[current_book].chapters[current_chapter],{seek: time || 0});
     data_manager.set_data({
         book: current_book,
         chapter: current_chapter
     });
+}
+
+//Works but need refactoring
+function navigate_chapter_time(direction){
+    player.seek(parseInt(last_playing_time)+(30*direction));
+    last_playing_time = parseInt(last_playing_time)+(30*direction);
+    last_save_time = last_playing_time;
 }
 try {
     (async()=>{
