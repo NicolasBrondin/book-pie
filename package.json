@@ -9,7 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ffplay": "^1.1.0",
     "keypress": "^0.2.1",
+    "mplayer": "^2.1.0",
     "play-sound": "^1.1.2",
     "say": "^0.15.0"
   }

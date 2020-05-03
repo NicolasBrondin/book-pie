@@ -15,27 +15,7 @@ apt-get update -y && \
 apt-get install -y nodejs npm git mpg123 espeak espeak-data python && \
 ln -s /usr/lib/arm-linux-gnueabihf/espeak-data/ /usr/share/espeak-data
 
-# Mbrola
-mkdir tmp_mbrola
-cd tmp_mbrola
-#wget http://www.tcts.fpms.ac.be/synthesis/mbrola/bin/pclinux/mbr301h.zip
-wget http://www.tcts.fpms.ac.be/synthesis/mbrola/bin/raspberri_pi/mbrola.tgz
-tar -xvzf mbrola.tgz
-#unzip mbr301h.zip
-#sudo cp mbrola-linux-i386 /usr/bin/mbrola
-sudo cp mbrola /usr/bin/mbrola
-#wget http://www.tcts.fpms.ac.be/synthesis/mbrola/dba/fr1/fr1.zip
-wget http://tcts.fpms.ac.be/synthesis/mbrola/dba/fr4/fr4-990521.zip
-#unzip en1-980910.zip
-unzip fr4-990521.zip
-sudo mkdir /usr/share/mbrola
-#sudo cp en1/en1 /usr/share/mbrola/en1
-sudo cp fr4-990521/fr4 /usr/share/mbrola/fr4
-sudo cp fr4-990521/fr4 /usr/share/espeak-data/voices/fr4
-cd ..
-sudo rm -Rf ./tmp_mbrola/
-#http://espeak.sourceforge.net/mbrola.html
-# http://tcts.fpms.ac.be/synthesis/mbrola/dba/fr4/fr4-990521.zip
+wget https://nodejs.org/dist/v12.16.3/node-v12.16.3-linux-armv7l.tar.xz
 
 # Install project
 cd ~ && \
@@ -45,3 +25,17 @@ cd ./pepe && \
 npm install && \
 npm install pm2 -g && \
 sh /etc/init.d/startup.sh
+
+sudo apt-get purge nodejs
+sudo apt-get purge npm
+sudo apt autoremove
+
+wget https://nodejs.org/dist/latest-v10.x/node-v10.20.1-linux-armv6l.tar.gz && \
+tar -xzf node-v10.20.1-linux-armv6l.tar.gz && \
+node-v10.20.1-linux-armv6l/bin/node -v && \
+cd node-v10.20.1-linux-armv6l/ && \
+sudo cp -R * /usr/local/
+export PATH=$PATH:/usr/local/bin
+cd ..
+rm -rf node-v10.20.1-linux-armv6l/
+rm -rf node-v10.20.1-linux-armv6l.tar.gz

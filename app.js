@@ -1,72 +1,124 @@
-//LIBS
-const say = require('say'),
-    fs = require('fs'),
-    player = require('play-sound')(opts = {}),
-    keypress = require('keypress'),
-    child_process = require('child_process'),
-    Gpio = require('onoff').Gpio;
+//const FFplay = require("ffplay"),
+const MPlayer = require('mplayer'),
+keypress = require('keypress');
 
-const debug = false;
-let debug_timer = null;
-let button_timer = null;
-let button_available = true;
+const BOOKS_DIR = "./data/";
+const VOICE_DIR = "./audio/";
 
-let button_left, button_right, button_top, button_bottom, led;
-
-function close_process() {
-    if (debug) {
-        clearInterval(debug_timer);
-    }
-    button_top.unexport();
-    button_bottom.unexport();
-    button_left.unexport();
-    button_right.unexport();
-    led.writeSync(0);
-    led.unexport();
-    console.log('Closing normally');
-    process.exit();
+const WORDS = {
+    welcome: VOICE_DIR+"Bienvenue.wav",
+    main_menu: VOICE_DIR+"Menu principale.wav",
+    help: VOICE_DIR+"Besoin aide.wav",
+    books:VOICE_DIR+"Liste des livres.wav",
+    resume:VOICE_DIR+"Reprendre.wav",
+    open_help: VOICE_DIR+"help.m4a",
+    no_save: VOICE_DIR+"no-save.m4a",
 }
 
-if (Gpio.accessible) {
-    try {
-        button_left = new Gpio(27, 'in', 'both', { /*debounceTimeout: 10*/ }); // Physical right button
-        button_right = new Gpio(18, 'in', 'both', { /*debounceTimeout: 10*/ }); //Physical bottom button
-        button_top = new Gpio(22, 'in', 'both', { /*debounceTimeout: 10*/ }); // Physic left button
-        button_bottom = new Gpio(23, 'in', 'both', { /*debounceTimeout: 10*/ }); //Physical top button
-        led = new Gpio(17, 'out');
-        led.writeSync(1);
-        console.log("GPIO configured");
-    } catch (e) {
-        throw e;
-        close_process();
-    }
-} else {
-    console.log("GPIO not accessible");
+let save = {
+    book: null
 }
 
-//CONSTANTS
-const VOICE_SPEED = 1;
-const LIBRARY_ROOT = __dirname + '/data/';
-
-//VARIABLES
+let books;
 var current_book = null;
 var current_chapter = null;
-var selector = 'book';
-var audio = null;
-var tts_proc = null;
-var books = null;
+var selector_level = 'menu';
+const menu = ['resume','books','help'];
+let current_menu_item = null;
+var player = new MPlayer();
+var player_status = null;
+let playlist = [];
+let playing = false;
 
-function button_clicked() {
-    button_available = false;
-    button_timer = setTimeout(function () {
-        button_available = true;
-    }, 1000);
+player.on("stop", function(){
+    playing = false;
+    if(playlist.length > 0){
+        let item = playlist.pop();
+        player.openFile(item.file);
+        if(item.opts.seek){
+            player.seek(item.opts.seek);
+        }
+        playing = true;
+    }
+})/*
+player.on("status", function(status){
+    console.log(status);
+    if(player_status == null){
+        init();
+    }
+    player_status = status;
+    if(player_status.playing == false && playlist.length > 0){
+        player.openFile(playlist.pop());
+    }
+})*/
+fs = require('fs');
+
+function init(){
+    process.stdin.on('keypress', detectArrows);
+    var readline = require('readline');
+var rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: false
+});
+
+rl.on('line', function(line){
+    execute_command(line);
+})
+    load_library();
+    welcome();
+    console.log(books);
 }
 
-function init() {
+function detectArrows(ch, key) {
+    console.log(key);
+    process.stdin.pause();
+    if (key && ["left","right","up","down"].indexOf(key.name)>-1) {
+        execute_command(key.name);
+    }
+    process.stdin.resume();
+}
 
-    console.log("Starting...");
+function welcome(){
+    play_sound_file(WORDS.welcome);
+    play_sound_file(WORDS.main_menu);
+}
 
+function play_sound_file(path, opts) {
+    opts = opts || {};
+    /*if(time) {
+       player = new FFplay(path,["-ss", time, "-autoexit", "-nodisp"]);
+        
+    } else {
+        player = new FFplay(path,["-autoexit", "-nodisp"]); // Loads the sound file and automatically starts playing
+    }*/
+        if(opts.force){
+            playlist = [];
+        }
+        playlist.push({file: path, opts: opts});
+    if(!playing || opts.force) {
+        let item = playlist.pop()
+        player.openFile(item.file);
+        if(item.opts.seek){
+            player.seek(item.opts.seek);
+        }
+        playing = true;
+    }
+    /*if(player_status && player_status.playing){
+    } else {
+        player.openFile(path);
+    }
+    if(!player_status){
+        player.pause();
+    }*/
+    /*if(callbacks.on_exit){
+        player.proc.on('exit',callbacks.on_exit);
+    }*/
+    
+}
+
+function load_library() {
+    
     // Books library initialization
     books = getDirectories();
     books = books.map(function (book) {
@@ -77,268 +129,73 @@ function init() {
         };
         return book;
     });
-
-    console.log("Books library loaded!");
-
-    // Keyboard input initialization
-    /*keypress(process.stdin);
-    process.stdin.on('keypress', detectArrows);
-    if (process.stdin.setRawMode){
-        process.stdin.setRawMode(true)
-    }
-
-    process.stdin.resume();*/
-
-
-    button_left.watch(function (err, value) {
-        console.log(new Date()," | button left : ", value);
-        if (value == 1) {
-            if (button_available) {
-                button_clicked();
-                if (selector == 'book') {
-                    previousBook();
-                } else if (selector == 'chapter') {
-                    previousChapter();
-                }
-            }
-        }
-    });
-
-    button_right.watch(function (err, value) {
-
-        console.log(new Date()," | button right: ", value);
-        if (value == 1) {
-            if (button_available) {
-                button_clicked();
-                if (selector == 'book') {
-                    nextBook();
-                } else if (selector == 'chapter') {
-                    nextChapter();
-                }
-            }
-        }
-    });
-
-    button_top.watch(function (err, value) {
-
-        console.log(new Date(), " | button top: ", value);
-        if (value == 1) {
-            if (button_available) {
-                button_clicked();
-                if (selector == 'book') {
-                    openBook();
-                } else if (selector == 'chapter') {
-                    playChapter();
-                }
-            }
-        }
-    });
-
-    button_bottom.watch(function (err, value) {
-
-        console.log(new Date(), " | button bottom: ", value);
-        if (value == 1) {
-            if (button_available) {
-                button_clicked();
-                if (audio) {
-                    stopChapter();
-                } else if (selector == 'chapter') {
-                    closeBook();
-                }
-            }
-        }
-    });
-
-    console.log("Starting voice!");
-
-    // Voice initialization
-    tts("Bonjour Pépé !");
-    setTimeout(function () {
-        tts("Touche droite et gauche: Changer les livres. Touche haut: Ouvrir un livre. Touche bas: Revenir en arrière.")
-        setTimeout(function () {
-            tts("Liste des livres");
-            current_book = 0;
-            setTimeout(function () {
-                sayBookTitle();
-            },2000);
-        }, 9000);
-    }, 3000);
-}
-
-// Text-To-Speech
-function tts(str) {
-    //say.stop()
-    //say.speak(str, null, VOICE_SPEED);
-    //
-
-    if (tts_proc) {
-
-        tts_proc.kill('SIGINT');
-    }
-    tts_proc = child_process.spawn('sh', ['-c','espeak -v  mb-fr4 -s 115 "' + str + '" --stdout | aplay']);
-
-    tts_proc.stdout.on('data', (data) => {
-        console.log(`stdout: ${data}`);
-    });
-
-    tts_proc.stderr.on('data', (data) => {
-        console.log(`stderr: ${data}`);
-    });
-
-    tts_proc.on('close', (code) => {
-        console.log(`Finished speaking`);
-    });
-
 }
 
 function getDirectories() {
-    return fs.readdirSync(LIBRARY_ROOT).filter(function (file) {
-      return fs.statSync(LIBRARY_ROOT + file).isDirectory();
+    return fs.readdirSync(BOOKS_DIR).filter(function (file) {
+      return fs.statSync(BOOKS_DIR + file).isDirectory();
     });
 }
 
 function getFiles(book) {
-    return fs.readdirSync(LIBRARY_ROOT+book+'/').filter(function (file) {
-      return !fs.statSync(LIBRARY_ROOT+book+'/'+file).isDirectory();
+    return fs.readdirSync(BOOKS_DIR+book+'/').filter(function (file) {
+      return !fs.statSync(BOOKS_DIR+book+'/'+file).isDirectory() && file !== "title.m4a";
     });
 }
 
-function sayBookTitle() {
-    tts("Livre "+ (current_book+1) +":"+books[current_book].title);
-}
-
-function sayChapterTitle() {
-    //tts(books[current_book].chapters[current_chapter]);
-    tts("Chapitre " + (current_chapter + 1));
-}
-
-function getCurrentAbsolutePath() {
-    var book = books[current_book];
-    var chapter = books[current_book].chapters[current_chapter];
-    return LIBRARY_ROOT + book.title + '/' + chapter;
-}
-
-function playChapter() {
-    if (!audio) {
-        tts("Lecture du chapitre");
-        setTimeout(function () {
-            audio = player.play(getCurrentAbsolutePath(), function (err) {
-                if (err) {
-                    console.error(err.message);
+function execute_command(command){
+    switch(command){
+        case "up": {
+            if(selector_level === 'menu'){
+                switch(menu[current_menu_item]){
+                    case 'help': {play_sound_file(WORDS.open_help);break;}
+                    case 'resume': {load_previous_book();break;}
+                    case 'books': {open_book_list();break;}
                 }
-            });
-        }, 500);
-    }
-}
-
-function stopChapter() {
-    audio.kill();
-    audio = null;
-    tts("Liste des chapitres");
-    current_chapter = 0;
-    setTimeout(function () {
-        sayChapterTitle();
-    },2000);
-    selector = 'chapter';
-}
-
-function openBook() {
-    if (current_book != null) {
-        tts("Liste des chapitres");
-        current_chapter = 0;
-        setTimeout(function () {
-            sayChapterTitle();
-        },2000);
-        selector = 'chapter';
-    }
-}
-
-function closeBook() {
-    tts("Liste des livres");
-    current_book = 0;
-    setTimeout(function () {
-        sayBookTitle();
-    },2000);
-    selector = 'book';
-}
-
-function nextBook() {
-    current_book = current_book != null ? current_book + 1 : 0
-    if (current_book == books.length) {
-        current_book = 0;
-    }
-    sayBookTitle();
-}
-
-function previousBook() {
-    current_book = current_book != null ? current_book - 1 : 0
-    if (current_book < 0) {
-        current_book = books.length - 1;
-    }
-    sayBookTitle();
-}
-
-function previousChapter() {
-    current_chapter = current_chapter != null ? current_chapter - 1 : 0
-    if (current_chapter < 0) {
-        current_chapter = books[current_book].chapters.length - 1;
-    }
-    sayChapterTitle();
-}
-
-function nextChapter() {
-    current_chapter = current_chapter != null ? current_chapter + 1 : 0
-    if (current_chapter == books[current_book].chapters.length) {
-        current_chapter = 0;
-    }
-    sayChapterTitle();
-}
-
-/*
-function detectArrows(ch, key) {
-    process.stdin.pause();
-    if (key) {
-        if (key.name == 'left') {
-            if (selector == 'book') {
-                previousBook();
-            } else if (selector == 'chapter') {
-                previousChapter();
             }
-        } else if (key.name == 'right') {
-            if (selector == 'book') {
-                nextBook();
-            } else if (selector == 'chapter') {
-                nextChapter();
+            
+            break;
+        }
+        case "down": {break;}
+        case "left": {
+            if(selector_level === 'menu'){
+                navigate_main_menu(-1);
             }
-        } else if (key.name == 'up') {
-            if (selector == 'book') {
-                openBook();
-            } else if (selector == 'chapter') {
-                playChapter();
+            break;
+        }
+        case "right": {
+            if(selector_level === 'menu'){
+                navigate_main_menu(1);
             }
-        } else if (key.name == 'down') {
-            if (audio) {
-                stopChapter();
-            } else if (selector == 'chapter') {
-                closeBook();
-            }
-        } else if (key.name == 'escape') {
-            process.exit(0);
+            break;
         }
     }
-    process.stdin.resume();
-}*/
-
-init();
-
-if (debug) {
-    debug_timer = setInterval(function () { tts("Bonjour Pépé, comment allez-vous aujourd'hui ?"); }, 3000);
 }
 
-process.on('SIGINT', close_process);
+function open_main_menu(){
+    current_menu_item === null;
+    selector_level = "menu";
+}
 
+function navigate_main_menu(direction){
+    if(current_menu_item === null){
+        current_menu_item = 0
+    } else {
+        current_menu_item = ((((current_menu_item+direction) % (menu.length))+menu.length)%menu.length);
+    }
+    play_sound_file(WORDS[menu[current_menu_item]]);
+}
 
+function load_previous_book(){
+    if(save.book){
+        //TO-DO
+    } else {
+        play_sound_file(WORDS.no_save);
+    }
+}
+function open_book_list(){
+    selector_level = "books";
+    play_sound_file(BOOKS_DIR+books[0].title+'/title.m4a');
+}
 
-
-
-
+init();
