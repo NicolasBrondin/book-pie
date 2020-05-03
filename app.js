@@ -13,6 +13,8 @@ const WORDS = {
     resume:VOICE_DIR+"Reprendre.wav",
     open_help: VOICE_DIR+"help.m4a",
     no_save: VOICE_DIR+"no-save.m4a",
+    chapters_list: VOICE_DIR+"Liste des chapitres.wav",
+    chapter: function(i){return VOICE_DIR+"Chapitre "+i+".wav"}
 }
 
 let save = {
@@ -26,7 +28,6 @@ var selector_level = 'menu';
 const menu = ['resume','books','help'];
 let current_menu_item = null;
 var player = new MPlayer();
-var player_status = null;
 let playlist = [];
 let playing = false;
 
@@ -81,7 +82,7 @@ function detectArrows(ch, key) {
 
 function welcome(){
     play_sound_file(WORDS.welcome);
-    play_sound_file(WORDS.main_menu);
+    open_main_menu();
 }
 
 function play_sound_file(path, opts) {
@@ -152,21 +153,39 @@ function execute_command(command){
                     case 'resume': {load_previous_book();break;}
                     case 'books': {open_book_list();break;}
                 }
-            }
+            } else if(selector_level === 'books'){
+                open_book_chapters_list();
+            } else if(selector_level === 'chapters'){
+                play_chapter();
+            } 
             
             break;
         }
-        case "down": {break;}
+        case "down": {
+            if(selector_level === 'books'){
+                open_main_menu();
+            } else if(selector_level === 'chapters'){
+                open_book_list();
+            }
+            break;}
         case "left": {
             if(selector_level === 'menu'){
                 navigate_main_menu(-1);
-            }
+            } else if(selector_level === 'books') {
+                navigate_book_list(-1);
+            }else if(selector_level === 'chapters') {
+                navigate_chapter_list(-1);
+            } 
             break;
         }
         case "right": {
             if(selector_level === 'menu'){
                 navigate_main_menu(1);
-            }
+            }else if(selector_level === 'books') {
+                navigate_book_list(1); 
+            }else if(selector_level === 'chapters') {
+                navigate_chapter_list(1);
+            } 
             break;
         }
     }
@@ -175,6 +194,8 @@ function execute_command(command){
 function open_main_menu(){
     current_menu_item === null;
     selector_level = "menu";
+    
+    play_sound_file(WORDS.main_menu);
 }
 
 function navigate_main_menu(direction){
@@ -195,7 +216,30 @@ function load_previous_book(){
 }
 function open_book_list(){
     selector_level = "books";
-    play_sound_file(BOOKS_DIR+books[0].title+'/title.m4a');
+    current_book = 0;
+    play_sound_file(BOOKS_DIR+books[current_book].title+'/title.m4a');
 }
 
+function navigate_book_list(direction){
+    current_book = ((((current_book+direction) % (books.length))+books.length)%books.length);
+    play_sound_file(BOOKS_DIR+books[current_book].title+'/title.m4a');
+}
+
+function open_book_chapters_list(){
+    selector_level = "chapters";
+    current_chapter = 0;
+    play_sound_file(WORDS.chapters_list);
+    play_sound_file(WORDS.chapter(current_chapter+1));
+}
+
+function navigate_chapter_list(direction){
+    current_chapter = ((((current_chapter+direction) % (books[current_book].chapters.length))+books[current_book].chapters.length)%books[current_book].chapters.length);
+    play_sound_file(WORDS.chapter(current_chapter+1));
+}
+
+function play_chapter(){
+    selector_level = "player";
+    console.log(BOOKS_DIR+books[current_book].chapters[current_chapter]);
+    play_sound_file(BOOKS_DIR+"/"+books[current_book].title+"/"+books[current_book].chapters[current_chapter]);
+}
 init();
