@@ -33,12 +33,14 @@ let last_playing_time = 0;
 let last_save_time = 0;
 let playlist = [];
 let playing = false;
+let volume = 100;
 
 player.on("stop", function(){
     playing = false;
     if(playlist.length > 0){
         let item = playlist.pop();
         player.openFile(item.file);
+        player.volume(volume);
         if(item.opts.seek){
             player.seek(item.opts.seek);
         }
@@ -66,29 +68,24 @@ fs = require('fs');
 
 async function init(){
     await data_manager.init(USER_DATA_FILE);
-    process.stdin.on('keypress', detectArrows);
+    let user_data = data_manager.get_data();
+    if(user_data.volume){
+        volume = user_data.volume;
+        player.volume(volume);
+    }
     var readline = require('readline');
-var rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false
-});
+    var rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false
+    });
 
-rl.on('line', function(line){
-    execute_command(line);
-})
+    rl.on('line', function(line){
+        execute_command(line);
+    })
     load_library();
     welcome();
     console.log(books);
-}
-
-function detectArrows(ch, key) {
-    console.log(key);
-    process.stdin.pause();
-    if (key && ["left","right","up","down"].indexOf(key.name)>-1) {
-        execute_command(key.name);
-    }
-    process.stdin.resume();
 }
 
 function welcome(){
@@ -98,12 +95,6 @@ function welcome(){
 
 function play_sound_file(path, opts) {
     opts = opts || {};
-    /*if(time) {
-       player = new FFplay(path,["-ss", time, "-autoexit", "-nodisp"]);
-        
-    } else {
-        player = new FFplay(path,["-autoexit", "-nodisp"]); // Loads the sound file and automatically starts playing
-    }*/
         if(opts.force){
             playlist = [];
         }
@@ -111,21 +102,12 @@ function play_sound_file(path, opts) {
     if(!playing || opts.force) {
         let item = playlist.pop()
         player.openFile(item.file);
+        player.volume(volume);
         if(item.opts.seek){
             player.seek(item.opts.seek);
         }
         playing = true;
     }
-    /*if(player_status && player_status.playing){
-    } else {
-        player.openFile(path);
-    }
-    if(!player_status){
-        player.pause();
-    }*/
-    /*if(callbacks.on_exit){
-        player.proc.on('exit',callbacks.on_exit);
-    }*/
     
 }
 
@@ -204,6 +186,22 @@ function execute_command(command){
             } else if(selector_level === 'player') {
                 navigate_chapter_time(1);
             }
+            break;
+        }
+        case "vol+": {
+            volume = Math.min(100,volume+10);
+            player.volume(volume);
+            data_manager.set_data({
+                volume: volume
+            });
+            break;
+        }
+        case "vol-": {
+            volume = Math.max(60,volume-10);
+            player.volume(volume);
+            data_manager.set_data({
+                volume: volume
+            });
             break;
         }
     }
