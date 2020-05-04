@@ -1,6 +1,7 @@
 //const FFplay = require("ffplay"),
 const MPlayer = require('mplayer'),
-UserDataManager = require('./UserDataManager.js');
+UserDataManager = require('./UserDataManager.js'),
+Gpio = require('onoff').Gpio;
 
 
 const BOOKS_DIR = "./data/";
@@ -35,6 +36,31 @@ let playlist = [];
 let playing = false;
 let volume = 100;
 
+let led;
+let btn_left;
+let btn_right;
+let btn_up;
+let btn_down;
+let btn_vol_up;
+let btn_vol_down;
+
+
+function close_process() {
+    /*if (debug) {
+        clearInterval(debug_timer);
+    }*/
+    button_vol_up.unexport();
+    button_vol_down.unexport();
+    button_up.unexport();
+    button_down.unexport();
+    button_left.unexport();
+    button_right.unexport();
+    led.writeSync(0);
+    led.unexport();
+    //console.log('Closing normally');
+    process.exit();
+}
+
 player.on("stop", function(){
     playing = false;
     if(playlist.length > 0){
@@ -67,6 +93,54 @@ player.on("time", function(time){
 fs = require('fs');
 
 async function init(){
+    
+    if (Gpio.accessible) {
+        try {
+            button_left = new Gpio(17, 'in', 'both', { debounceTimeout: 10 }); // Physical right button
+            button_right = new Gpio(27, 'in', 'both', { debounceTimeout: 10 }); //Physical bottom button
+            button_up = new Gpio(22, 'in', 'both', { debounceTimeout: 10 }); // Physic left button
+            button_down = new Gpio(23, 'in', 'both', { debounceTimeout: 10 }); //Physical top button
+            button_vol_down = new Gpio(24, 'in', 'both', { debounceTimeout: 10 }); //Physical top button
+            button_vol_up = new Gpio(25, 'in', 'both', { debounceTimeout: 10 }); //Physical top button
+            led = new Gpio(18, 'out');
+            led.writeSync(1);
+            button_left.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("left");
+                }
+            });
+            button_right.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("right");
+                }
+            });
+            button_up.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("up");
+                }
+            });
+            button_down.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("down");
+                }
+            });
+            button_vol_up.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("vol+");
+                }
+            });
+            button_vol_down.watch(function (err, value) {
+                if (value == 0) {
+                    execute_command("vol-");
+                }
+            });
+            console.log("GPIO configured");
+        } catch (e) {
+            throw e;
+            close_process();
+        }
+    }
+
     await data_manager.init(USER_DATA_FILE);
     let user_data = data_manager.get_data();
     if(user_data.volume){
@@ -281,3 +355,5 @@ try {
 }catch(e){
     console.error(e);
 }
+
+process.on('SIGINT', close_process);
